@@ -1,8 +1,9 @@
 import json, random, time
 from kafka import KafkaProducer
 
-BOOTSTRAP = "localhost:29092"
-STRATEGIES = ["A", "B", "C"]
+
+BOOTSTRAP = "localhost:9092"
+STRATEGIES = ["A", "B", "C", "D"]
 
 producer = KafkaProducer(
     bootstrap_servers=BOOTSTRAP,
@@ -11,7 +12,7 @@ producer = KafkaProducer(
 )
 
 def gen_msg(strategy: str) -> tuple[str, dict]:
-    key = f"user-{random.randint(1, 5)}"
+    key = f"user-{random.randint(1, 1000)}"
     payload = {
         "strategy": strategy,
         "value": random.randint(1, 100),
@@ -21,10 +22,17 @@ def gen_msg(strategy: str) -> tuple[str, dict]:
 
 try:
     while True:
+        # 每秒只生成一個使用者 key
+        key = f"user-{random.randint(1, 1000)}"
         for s in STRATEGIES:
-            k, v = gen_msg(s)
-            producer.send(f"{s}_input", key=k, value=v)
+            # 為每個策略使用相同的 key
+            payload = {
+                "strategy": s,
+                "value": random.randint(1, 100),
+                "ts": int(time.time() * 1000)
+            }
+            producer.send(f"{s}_input", key=key, value=payload)
         producer.flush()
-        time.sleep(1)          # 每秒三筆
+        time.sleep(1)
 except KeyboardInterrupt:
     print("Stopped producer.")

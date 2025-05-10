@@ -77,17 +77,25 @@ services:
     platform: linux/arm64/v8
     container_name: spark-master
     hostname: spark-master
+    user: root
     environment:
       - SPARK_MODE=master
       - SPARK_MASTER_HOST=spark-master
       - SPARK_MASTER_WEBUI_PORT=8081
-    ports:
-      - "7077:7077"   # Spark cluster 連線
-      - "8081:8081"   # Spark Master Web UI
-    networks:
-      - kafka-pyspark
+      - HOME=/opt/bitnami
+      - SPARK_JARS_IVY=/opt/bitnami/ivy
+      - PYTHONPATH=/opt/bitnami/spark/python/lib/py4j-0.10.9.7-src.zip:/opt/bitnami/spark/python/
+      
     volumes:
       - ./spark_jobs:/opt/bitnami/spark/scripts
+      # 修改 Ivy 快取目錄的掛載點
+      - ./.ivy2:/opt/bitnami/ivy
+      - ./requirements.txt:/opt/bitnami/spark/requirements.txt
+    ports:
+      - "7077:7077"
+      - "8081:8081"
+    networks:
+      - kafka-pyspark
 
 ###############################################################################
 # Spark Worker #1
@@ -97,11 +105,19 @@ services:
     platform: linux/arm64/v8
     container_name: spark-worker-1
     depends_on: [spark-master]
+    user: root
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=1g      # 依需要調整
+      - SPARK_WORKER_MEMORY=2g
       - SPARK_WORKER_CORES=2
+      - SPARK_DAEMON_MEMORY=1g
+      - HOME=/opt/bitnami
+      - SPARK_JARS_IVY=/opt/bitnami/ivy
+      - PYTHONPATH=/opt/bitnami/spark/python/lib/py4j-0.10.9.7-src.zip:/opt/bitnami/spark/python/
+    volumes:
+      - ./spark_jobs:/opt/bitnami/spark/scripts
+      - ./.ivy2:/opt/bitnami/ivy
     networks:
       - kafka-pyspark
 
@@ -113,10 +129,18 @@ services:
     platform: linux/arm64/v8
     container_name: spark-worker-2
     depends_on: [spark-master]
+    user: root
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_MEMORY=2g
       - SPARK_WORKER_CORES=2
+      - SPARK_DAEMON_MEMORY=1g
+      - HOME=/opt/bitnami
+      - SPARK_JARS_IVY=/opt/bitnami/ivy
+      - PYTHONPATH=/opt/bitnami/spark/python/lib/py4j-0.10.9.7-src.zip:/opt/bitnami/spark/python/
+    volumes:
+      - ./spark_jobs:/opt/bitnami/spark/scripts
+      - ./.ivy2:/opt/bitnami/ivy
     networks:
       - kafka-pyspark
