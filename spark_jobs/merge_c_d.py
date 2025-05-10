@@ -12,7 +12,7 @@ spark-submit \
 import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, expr, from_json, greatest, to_json, to_timestamp, struct
-from pyspark.sql.types import StructType, StructField, IntegerType, LongType
+from pyspark.sql.types import StructType, StructField, IntegerType, LongType, StringType
 
 # --------------------------------------------------
 # 1. Spark & Kafka 基本設定
@@ -36,8 +36,9 @@ schema_c = StructType([
 ])
 
 schema_d = StructType([
-    StructField("some_value", IntegerType()),
-    StructField("ts",        LongType())       # 毫秒
+    StructField("strategy", StringType()),
+    StructField("value", IntegerType()),
+    StructField("ts", LongType())
 ])
 
 # --------------------------------------------------
@@ -77,7 +78,7 @@ d_parsed = (
          .select("key", from_json("json", schema_d).alias("d"))
          .select(
              col("key"),
-             col("d.some_value").alias("d_val"),
+             col("d.value").alias("d_val"),
              to_timestamp(col("d.ts") / 1000.0).alias("d_ts")
          )
          .withWatermark("d_ts", "30 minutes")
