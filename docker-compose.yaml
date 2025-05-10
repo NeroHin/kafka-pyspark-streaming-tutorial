@@ -1,0 +1,122 @@
+networks:
+  kafka-pyspark:
+    driver: bridge
+
+services:
+###############################################################################
+# Kafka - 單節點 KRaft（controller + broker）
+###############################################################################
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0          # 7.6+ 原生支援 KRaft
+    platform: linux/arm64/v8                    # M1 / arm64
+    container_name: kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"   # Client 連線
+      - "9093:9093"   # Controller 專用
+    environment:
+      # --- KRaft 基本參數 ---
+      KAFKA_KRAFT_MODE: "true"
+      KAFKA_PROCESS_ROLES: "controller,broker"
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+
+      # --- Listeners ---
+      KAFKA_LISTENERS: >
+        PLAINTEXT://0.0.0.0:9092,
+        CONTROLLER://0.0.0.0:9093,
+        INTERNAL://kafka:29092
+      KAFKA_ADVERTISED_LISTENERS: >
+        PLAINTEXT://localhost:9092,
+        INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: >
+        PLAINTEXT:PLAINTEXT,
+        CONTROLLER:PLAINTEXT,
+        INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+
+      # --- 其他常用參數 ---
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      # KRaft 叢集 ID (16字元 UUID base64)
+      CLUSTER_ID: "MkU3OEVBNTcwNTJDM0U5Qg"
+
+    volumes:
+      - ./data/kafka:/var/lib/kafka/data
+    networks:
+      - kafka-pyspark
+
+###############################################################################
+# Kafka-UI
+###############################################################################
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    platform: linux/arm64/v8
+    container_name: kafka-ui
+    depends_on: [kafka]
+    ports:
+      - "8084:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - kafka-pyspark
+
+###############################################################################
+# Spark Master
+###############################################################################
+  spark-master:
+    image: bitnami/spark:3.5
+    platform: linux/arm64/v8
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_WEBUI_PORT=8081
+    ports:
+      - "7077:7077"   # Spark cluster 連線
+      - "8081:8081"   # Spark Master Web UI
+    networks:
+      - kafka-pyspark
+    volumes:
+      - ./spark_jobs:/opt/bitnami/spark/scripts
+
+###############################################################################
+# Spark Worker #1
+###############################################################################
+  spark-worker-1:
+    image: bitnami/spark:3.5
+    platform: linux/arm64/v8
+    container_name: spark-worker-1
+    depends_on: [spark-master]
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1g      # 依需要調整
+      - SPARK_WORKER_CORES=2
+    networks:
+      - kafka-pyspark
+
+###############################################################################
+# Spark Worker #2
+###############################################################################
+  spark-worker-2:
+    image: bitnami/spark:3.5
+    platform: linux/arm64/v8
+    container_name: spark-worker-2
+    depends_on: [spark-master]
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_CORES=2
+    networks:
+      - kafka-pyspark
